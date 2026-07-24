@@ -1,0 +1,10 @@
+# Base deps -- enough to run `server.py` in MOCK_MODE (no GPU, no model
+# weights). This is what's installed in CI / any non-GPU environment.
+#
+# For the real STT/TTS path on the Runpod box, also install
+# requirements-gpu.txt -- see README.md.
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+httpx

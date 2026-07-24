@@ -1,0 +1,29 @@
+# Real LLM + STT/TTS deps -- install these on the Runpod GPU box in
+# addition to requirements.txt, then set MOCK_MODE=false (or unset it).
+# Not needed to run server.py in mock mode. The Dockerfile installs this
+# file; `pip install -r requirements.txt -r requirements-gpu.txt` is
+# sufficient on its own -- no separate manual `pip install vllm` step.
+#
+# System dependency: ffmpeg (faster-whisper/ctranslate2 shells out to it to
+# decode whatever audio format the browser recorded -- e.g. webm/opus).
+#   apt-get install -y ffmpeg
+
+# vLLM serves Qwen as its own OpenAI-compatible process (see start.sh) --
+# not imported by server.py, but installed here so the one image has both.
+vllm
+
+torch
+torchaudio
+faster-whisper
+
+# Chatterbox TTS (Resemble AI, MIT license) -- the default TTS_ENGINE.
+chatterbox-tts
+
+# Sesame CSM (SesameAILabs) -- the alternate TTS_ENGINE (TTS_ENGINE=sesame).
+# Not a pip package: clone it into this directory during the Docker build
+# so `from generator import load_csm_1b` (used by tts/sesame_engine.py)
+# resolves. See README.md "Sesame CSM setup".
+#   git clone https://github.com/SesameAILabs/csm.git csm_repo
+# Its own requirements.txt should be installed too; the CSM backbone model
+# (Llama-3.2-1B) is gated on Hugging Face and needs `huggingface-cli login`
+# with an account that has accepted Meta's license.

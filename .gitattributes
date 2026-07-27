@@ -1,0 +1,4 @@
+# These run on Linux (the Runpod pod). core.autocrlf on a Windows checkout
+# would rewrite them to CRLF, and bash fails on the trailing \r with errors
+# that point at the wrong thing entirely.
+*.sh text eol=lf

@@ -122,11 +122,12 @@ curl -sf "http://127.0.0.1:$SPEECH_PORT/health" || {
 }
 echo
 
-say "cloudflared tunnel"
-# Runpod only exposes ports declared when the pod was created, and 8010
-# usually is not one of them -- hence the tunnel. Quick tunnels need no
-# account, but the hostname is NEW on every run, which is exactly why voice
-# silently breaks after a restart until the backend is re-pointed.
+say "cloudflared tunnels"
+# Runpod only exposes ports declared when the Pod was created. 8010 almost
+# never is, and on a freshly deployed Pod 11434 may not be either -- so
+# tunnel BOTH rather than depending on the template being right. Quick
+# tunnels need no account, but every hostname is NEW on each run, which is
+# exactly why voice silently breaks after a restart.
 if ! command -v cloudflared >/dev/null; then
   curl -fsSL -o /usr/local/bin/cloudflared \
     https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
@@ -134,37 +135,48 @@ if ! command -v cloudflared >/dev/null; then
 fi
 pkill -f "cloudflared tunnel" 2>/dev/null || true
 sleep 1
-nohup cloudflared tunnel --url "http://127.0.0.1:$SPEECH_PORT" \
-  > "$LOG_DIR/cloudflared.log" 2>&1 &
-TUNNEL=""
-for _ in $(seq 1 45); do
-  TUNNEL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG_DIR/cloudflared.log" | head -1 || true)
-  [ -n "$TUNNEL" ] && break
-  sleep 2
-done
-[ -n "$TUNNEL" ] || {
-  echo "no tunnel URL yet. Last log lines:"
-  tail -20 "$LOG_DIR/cloudflared.log"
-  exit 1
+
+# start_tunnel <local-port> <log-name> -> echoes the public https URL
+start_tunnel() {
+  local port="$1" name="$2" log="$LOG_DIR/cloudflared-$2.log" url=""
+  nohup cloudflared tunnel --url "http://127.0.0.1:$port" > "$log" 2>&1 &
+  for _ in $(seq 1 45); do
+    url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$log" | head -1 || true)
+    [ -n "$url" ] && break
+    sleep 2
+  done
+  if [ -z "$url" ]; then
+    echo "no tunnel URL for $name. Last log lines:" >&2
+    tail -20 "$log" >&2
+    return 1
+  fi
+  echo "$url"
 }
+
+SPEECH_TUNNEL=$(start_tunnel "$SPEECH_PORT" speech)
+LLM_TUNNEL=$(start_tunnel "$OLLAMA_PORT" llm)
 
 POD_ID=$(hostname)
 cat <<EOF
 
 === Put these in the backend .env AND the HF Space variables ===
 
-VOICE_AI_BASE_URL=https://${POD_ID}-${OLLAMA_PORT}.proxy.runpod.net
+VOICE_AI_BASE_URL=$LLM_TUNNEL
 QWEN_MODEL=$QWEN_MODEL
-VOICE_SPEECH_BASE_URL=$TUNNEL
+VOICE_SPEECH_BASE_URL=$SPEECH_TUNNEL
 VOICE_AI_TOKEN=(unchanged -- must match on both sides)
 
-VOICE_SPEECH_BASE_URL is new on every restart. It is the one that silently
-breaks voice after a reboot, and the failure looks like a working console
-that just never answers.
+If you DID expose port $OLLAMA_PORT on this Pod, prefer the Runpod proxy for
+the LLM instead -- it is stable across restarts, unlike the tunnel:
+  VOICE_AI_BASE_URL=https://${POD_ID}-${OLLAMA_PORT}.proxy.runpod.net
+
+Both tunnel hostnames are new on every run. They are what silently break
+voice after a restart, and the failure looks like a working console that
+just never answers.
 
 Sanity-check from your own machine:
-  curl $TUNNEL/health
-  curl https://${POD_ID}-${OLLAMA_PORT}.proxy.runpod.net/api/tags
+  curl $SPEECH_TUNNEL/health
+  curl $LLM_TUNNEL/api/tags
 
 /health must report "mock_mode": false -- if it says true, the service came
 up without real models and every reply will be the canned mock.

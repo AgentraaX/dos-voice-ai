@@ -15,7 +15,7 @@ _ENGINES: dict[str, str] = {
 
 
 def _active_module():
-    name = os.environ.get("TTS_ENGINE", "chatterbox").lower()
+    name = os.environ.get("TTS_ENGINE", "sesame").lower()
     module_name = _ENGINES.get(name)
     if module_name is None:
         raise ValueError(
@@ -28,7 +28,7 @@ def _active_module():
 
 def get_engine() -> Callable[[str], bytes]:
     """Returns the active engine's `synthesize(text: str) -> bytes`,
-    selected by the TTS_ENGINE env var (default "chatterbox")."""
+    selected by the TTS_ENGINE env var (default "sesame")."""
     return _active_module().synthesize
 
 

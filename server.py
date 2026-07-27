@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
 
         preload_stt()
 
-        engine_name = os.environ.get("TTS_ENGINE", "chatterbox")
+        engine_name = os.environ.get("TTS_ENGINE", "sesame")
         log.info("Preloading TTS engine (%s)...", engine_name)
         from tts import preload_active_engine
 
@@ -86,7 +86,7 @@ def health():
     return {
         "status": "ok",
         "mock_mode": MOCK_MODE,
-        "tts_engine": os.environ.get("TTS_ENGINE", "chatterbox"),
+        "tts_engine": os.environ.get("TTS_ENGINE", "sesame"),
         "whisper_model": os.environ.get("WHISPER_MODEL", "large-v3-turbo"),
     }
 

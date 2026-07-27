@@ -8,7 +8,18 @@ set -euo pipefail
 
 WS=/workspace
 SRC="$WS/voice-ai"
-VENV=/opt/voice-venv
+# Each TTS engine has its own venv -- their torch pins conflict. Override both
+# together, or let TTS_ENGINE pick the matching one.
+TTS_ENGINE=${TTS_ENGINE:-sesame}
+if [ "$TTS_ENGINE" = "sesame" ]; then
+  VENV=${VENV:-/opt/sesame-venv}
+  export PYTHONPATH="$SRC/csm_repo${PYTHONPATH:+:$PYTHONPATH}"
+  # CSM's torch.compile path is slow to warm and flaky on first call.
+  export NO_TORCH_COMPILE=${NO_TORCH_COMPILE:-1}
+else
+  VENV=${VENV:-/opt/voice-venv}
+fi
+export TTS_ENGINE
 SPEECH_PORT=${SPEECH_PORT:-8010}
 OLLAMA_PORT=${OLLAMA_PORT:-11434}
 
@@ -36,14 +47,15 @@ if ! curl -sf "http://127.0.0.1:$OLLAMA_PORT/api/tags" >/dev/null 2>&1; then
 fi
 curl -sf "http://127.0.0.1:$OLLAMA_PORT/api/tags" >/dev/null && echo "ollama ok"
 
-say "speech service on :$SPEECH_PORT"
-# Match by the full path so the pattern cannot also match this script or an
-# ssh command line that merely mentions it.
-pkill -f "$VENV/bin/python -m uvicorn" 2>/dev/null || true
+say "speech service on :$SPEECH_PORT (TTS_ENGINE=$TTS_ENGINE, venv=$VENV)"
+# Bracketed first letter so this pattern cannot match the running script's own
+# command line -- pkill matching its own invocation has killed this shell more
+# than once.
+pkill -f "[u]vicorn server:app" 2>/dev/null || true
 sleep 1
 cd "$SRC"
 MOCK_MODE=false PRELOAD=true VOICE_AI_TOKEN="$VOICE_AI_TOKEN" \
-  HF_HOME="$HF_HOME" TORCH_HOME="$TORCH_HOME" \
+  TTS_ENGINE="$TTS_ENGINE" HF_HOME="$HF_HOME" TORCH_HOME="$TORCH_HOME" \
   setsid nohup "$VENV/bin/python" -m uvicorn server:app \
   --host 0.0.0.0 --port "$SPEECH_PORT" \
   > "$WS/logs/speech.log" 2>&1 < /dev/null &

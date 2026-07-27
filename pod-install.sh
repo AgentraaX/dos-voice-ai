@@ -39,6 +39,12 @@ PY="$VENV/bin/python"
 "$PY" -m pip install --quiet --upgrade pip
 
 say "base deps"
+# setuptools<81: chatterbox pulls in resemble-perth, whose perth_net imports
+# pkg_resources. setuptools 81 removed pkg_resources, and a Python 3.12 venv
+# ships no setuptools at all -- so perth/__init__ swallows the ImportError and
+# leaves PerthImplicitWatermarker as None, which chatterbox then calls. The
+# failure surfaces far away as "NoneType object is not callable" at startup.
+"$PY" -m pip install --quiet "setuptools<81"
 "$PY" -m pip install --quiet -r "$SRC/requirements.txt"
 
 say "torch + whisper + chatterbox"
